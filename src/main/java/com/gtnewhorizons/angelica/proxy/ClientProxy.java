@@ -1,6 +1,7 @@
 package com.gtnewhorizons.angelica.proxy;
 
 import com.google.common.base.Objects;
+import com.google.common.reflect.ClassPath;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.DefaultVertexFormat;
 import com.gtnewhorizon.gtnhlib.client.renderer.vertex.VertexFormat;
 import com.gtnewhorizons.angelica.compat.ModStatus;
@@ -56,6 +57,7 @@ import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static com.gtnewhorizons.angelica.loading.AngelicaTweaker.LOGGER;
+import static com.gtnewhorizons.angelica.transform.RedirectorTransformer.WARN_LEGACY_GL;
 
 public class ClientProxy extends CommonProxy {
 
@@ -69,6 +71,14 @@ public class ClientProxy extends CommonProxy {
         MinecraftForge.EVENT_BUS.register(this);
 
         AssetLoader.load();
+
+        // Every class needs to be loaded to ensure every one gets hit with the transformer
+        if (WARN_LEGACY_GL) {
+            try {
+                //noinspection UnstableApiUsage
+                ClassPath.from(getClass().getClassLoader()).getAllClasses().forEach(ClassPath.ClassInfo::load);
+            } catch (Throwable ignored) {}
+        }
     }
 
     @SubscribeEvent

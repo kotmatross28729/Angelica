@@ -2,45 +2,30 @@ package com.gtnewhorizons.angelica.transform;
 
 import com.google.common.collect.ImmutableSet;
 import com.gtnewhorizon.gtnhlib.asm.ClassConstantPoolParser;
-import com.gtnewhorizons.angelica.config.AngelicaConfig;
-import com.gtnewhorizons.angelica.loading.AngelicaTweaker;
 import net.coderbot.iris.IrisLogging;
 import net.minecraft.launchwrapper.IClassTransformer;
 import net.minecraft.launchwrapper.Launch;
-import net.minecraft.launchwrapper.LaunchClassLoader;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.AbstractInsnNode;
-import org.objectweb.asm.tree.ClassNode;
-import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.InsnList;
-import org.objectweb.asm.tree.InsnNode;
-import org.objectweb.asm.tree.IntInsnNode;
-import org.objectweb.asm.tree.LdcInsnNode;
-import org.objectweb.asm.tree.MethodInsnNode;
-import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.*;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.Files;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.nio.file.*;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static com.gtnewhorizons.angelica.transform.BlockTransformer.BlockBoundsFields;
-import static com.gtnewhorizons.angelica.transform.BlockTransformer.BlockClass;
-import static com.gtnewhorizons.angelica.transform.BlockTransformer.BlockPackage;
+import static com.gtnewhorizons.angelica.loading.AngelicaTweaker.LOGGER;
+import static com.gtnewhorizons.angelica.transform.BlockTransformer.*;
 
 /**
  * This transformer redirects many GL calls to our custom GLStateManager
@@ -49,8 +34,11 @@ public class RedirectorTransformer implements IClassTransformer {
 
     private static final boolean ASSERT_MAIN_THREAD = Boolean.parseBoolean(System.getProperty("angelica.assertMainThread", "false"));
     private static final boolean DUMP_CLASSES = Boolean.parseBoolean(System.getProperty("angelica.dumpClass", "false"));
+    public static final boolean WARN_LEGACY_GL = Boolean.parseBoolean(System.getProperty("angelica.warnLegacyGL", "false"));
+    private static final String LEGACY_GL_DUMP = "legacyGLDump.txt";
     private static final String Drawable = "org/lwjgl/opengl/Drawable";
     private static final String GLStateManager = "com/gtnewhorizons/angelica/glsm/GLStateManager";
+    private static final Pattern LEGACY_GL = Pattern.compile("org/lwjgl/opengl/GL[12].*");
     private static final String GL11 = "org/lwjgl/opengl/GL11";
     private static final String GL13 = "org/lwjgl/opengl/GL13";
     private static final String GL14 = "org/lwjgl/opengl/GL14";
@@ -93,6 +81,8 @@ public class RedirectorTransformer implements IClassTransformer {
 
     // Needed because the config is loaded in LaunchClassLoader, but we need to access it in the parent system loader.
     private static final MethodHandle angelicaConfigSodiumEnabledGetter;
+
+    private static boolean overwroteDump = false;
 
     static {
         glCapRedirects.put(org.lwjgl.opengl.GL11.GL_ALPHA_TEST, "AlphaTest");
@@ -312,7 +302,7 @@ public class RedirectorTransformer implements IClassTransformer {
                 doWeShadow = BlockBoundsFields.stream().anyMatch(pair -> fieldsDeclaredByClass.contains(pair.getLeft()) || fieldsDeclaredByClass.contains(pair.getRight()));
             }
             if(doWeShadow) {
-                AngelicaTweaker.LOGGER.info("Class '{}' shadows one or more block bounds fields, these accesses won't be redirected!", cn.name);
+                LOGGER.info("Class '{}' shadows one or more block bounds fields, these accesses won't be redirected!", cn.name);
                 blockOwnerExclusions.add(cn.name);
             }
         }
@@ -322,9 +312,28 @@ public class RedirectorTransformer implements IClassTransformer {
             if (transformedName.equals("net.minecraft.client.renderer.OpenGlHelper") && (mn.name.equals("glBlendFunc") || mn.name.equals("func_148821_a"))) {
                 continue;
             }
+
             boolean redirectInMethod = false;
+            boolean hasLegacyGL = false;
+
             for (AbstractInsnNode node : mn.instructions.toArray()) {
                 if (node instanceof MethodInsnNode mNode) {
+
+                    // Scan for illegal GL calls
+                    if (WARN_LEGACY_GL && !hasLegacyGL && LEGACY_GL.matcher(mNode.owner).matches()) {
+                        try {
+                            if (!overwroteDump) Files.deleteIfExists(FileSystems.getDefault().getPath(LEGACY_GL_DUMP));
+                            final FileWriter fw = new FileWriter(LEGACY_GL_DUMP, true);
+                            fw.write(transformedName + "#" + mn.name + System.lineSeparator());
+                            fw.close();
+                            overwroteDump = true; // ensure only overwrite once
+                        } catch (IOException e) {
+                            LOGGER.error("Failed to open GL dump file! Legacy GL logging has been canceled.");
+                        }
+
+                        hasLegacyGL = true; // only need to check once per method
+                    }
+
                     if (mNode.owner.equals(GL11) && (mNode.name.equals("glEnable") || mNode.name.equals("glDisable")) && mNode.desc.equals("(I)V")) {
                         final AbstractInsnNode prevNode = node.getPrevious();
                         String name = null;
@@ -342,9 +351,9 @@ public class RedirectorTransformer implements IClassTransformer {
                         }
                         if (IrisLogging.ENABLE_SPAM) {
                             if (name == null) {
-                                AngelicaTweaker.LOGGER.info("Redirecting call in {} from GL11.{}(I)V to GLStateManager.{}(I)V", transformedName, mNode.name, mNode.name);
+                                LOGGER.info("Redirecting call in {} from GL11.{}(I)V to GLStateManager.{}(I)V", transformedName, mNode.name, mNode.name);
                             } else {
-                                AngelicaTweaker.LOGGER.info("Redirecting call in {} from GL11.{}(I)V to GLStateManager.{}()V", transformedName, mNode.name, name);
+                                LOGGER.info("Redirecting call in {} from GL11.{}(I)V to GLStateManager.{}()V", transformedName, mNode.name, name);
                             }
                         }
                         mNode.owner = GLStateManager;
@@ -363,14 +372,14 @@ public class RedirectorTransformer implements IClassTransformer {
                         mNode.itf = false;
                         changed = true;
                         if (IrisLogging.ENABLE_SPAM) {
-                            AngelicaTweaker.LOGGER.info("Redirecting call in {} to GLStateManager.makeCurrent()", transformedName);
+                            LOGGER.info("Redirecting call in {} to GLStateManager.makeCurrent()", transformedName);
                         }
                     } else {
                         final Map<String, String> redirects = methodRedirects.get(mNode.owner);
                         if (redirects != null && redirects.containsKey(mNode.name)) {
                             if (IrisLogging.ENABLE_SPAM) {
                                 final String shortOwner = mNode.owner.substring(mNode.owner.lastIndexOf("/") + 1);
-                                AngelicaTweaker.LOGGER.info("Redirecting call in {} from {}.{}{} to GLStateManager.{}{}", transformedName, shortOwner, mNode.name, mNode.desc, redirects.get(mNode.name), mNode.desc);
+                                LOGGER.info("Redirecting call in {} from {}.{}{} to GLStateManager.{}{}", transformedName, shortOwner, mNode.name, mNode.desc, redirects.get(mNode.name), mNode.desc);
                             }
                             mNode.owner = GLStateManager;
                             mNode.name = redirects.get(mNode.name);
@@ -391,7 +400,7 @@ public class RedirectorTransformer implements IClassTransformer {
                         }
                         if(fieldToRedirect != null) {
                             if (IrisLogging.ENABLE_SPAM) {
-                                AngelicaTweaker.LOGGER.info("Redirecting Block.{} in {} to thread-safe wrapper", fNode.name, transformedName);
+                                LOGGER.info("Redirecting Block.{} in {} to thread-safe wrapper", fNode.name, transformedName);
                             }
                             // Perform the redirect
                             fNode.name = fieldToRedirect.getLeft(); // use unobfuscated name
@@ -460,7 +469,7 @@ public class RedirectorTransformer implements IClassTransformer {
         try (final OutputStream output = Files.newOutputStream(classFile.toPath())) {
             output.write(data);
         } catch (IOException e) {
-            AngelicaTweaker.LOGGER.error("Could not save transformed class (byte[]) " + transformedName, e);
+            LOGGER.error("Could not save transformed class (byte[]) " + transformedName, e);
         }
     }
 
