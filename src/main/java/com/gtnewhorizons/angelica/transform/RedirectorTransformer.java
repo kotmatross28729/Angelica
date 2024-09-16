@@ -18,7 +18,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
-import java.nio.file.*;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static com.gtnewhorizons.angelica.loading.AngelicaTweaker.LOGGER;
 import static com.gtnewhorizons.angelica.transform.BlockTransformer.*;
+import static com.gtnewhorizons.angelica.transform.LegacyGLCalls.illegalCalls;
 
 /**
  * This transformer redirects many GL calls to our custom GLStateManager
@@ -321,17 +323,21 @@ public class RedirectorTransformer implements IClassTransformer {
 
                     // Scan for illegal GL calls
                     if (WARN_LEGACY_GL && !hasLegacyGL && LEGACY_GL.matcher(mNode.owner).matches()) {
-                        try {
-                            if (!overwroteDump) Files.deleteIfExists(FileSystems.getDefault().getPath(LEGACY_GL_DUMP));
-                            final FileWriter fw = new FileWriter(LEGACY_GL_DUMP, true);
-                            fw.write(transformedName + "#" + mn.name + System.lineSeparator());
-                            fw.close();
-                            overwroteDump = true; // ensure only overwrite once
-                        } catch (IOException e) {
-                            LOGGER.error("Failed to open GL dump file! Legacy GL logging has been canceled.");
-                        }
+                        final String method = mNode.name + " " + mNode.desc;
+                        if (illegalCalls.contains(method)) {
+                            try {
+                                if (!overwroteDump)
+                                    Files.deleteIfExists(FileSystems.getDefault().getPath(LEGACY_GL_DUMP));
+                                final FileWriter fw = new FileWriter(LEGACY_GL_DUMP, true);
+                                fw.write(transformedName + "#" + mn.name + ": " + method + System.lineSeparator());
+                                fw.close();
+                                overwroteDump = true; // ensure only overwrite once
+                            } catch (IOException e) {
+                                LOGGER.error("Failed to open GL dump file! Legacy GL logging has been canceled.");
+                            }
 
-                        hasLegacyGL = true; // only need to check once per method
+                            hasLegacyGL = true; // only need to check once per method
+                        }
                     }
 
                     if (mNode.owner.equals(GL11) && (mNode.name.equals("glEnable") || mNode.name.equals("glDisable")) && mNode.desc.equals("(I)V")) {
