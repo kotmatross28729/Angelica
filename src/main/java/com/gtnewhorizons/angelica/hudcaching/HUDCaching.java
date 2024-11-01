@@ -34,7 +34,6 @@ import net.minecraft.client.shader.Framebuffer;
 import net.minecraft.util.ChatComponentText;
 import net.minecraftforge.client.GuiIngameForge;
 import thaumcraft.common.Thaumcraft;
-import xaero.common.core.XaeroMinimapCore;
 
 import static com.gtnewhorizons.angelica.loading.AngelicaTweaker.LOGGER;
 
@@ -107,11 +106,6 @@ public class HUDCaching {
 
     @SuppressWarnings("unused")
     public static void renderCachedHud(EntityRenderer renderer, GuiIngame ingame, float partialTicks, boolean hasScreen, int mouseX, int mouseY) {
-        if (ModStatus.isXaerosMinimapLoaded && ingame instanceof GuiIngameForge) {
-            // this used to be called by asming into renderGameOverlay, but we removed it
-            XaeroMinimapCore.beforeIngameGuiRender(partialTicks);
-        }
-
         if (!OpenGlHelper.isFramebufferEnabled() || !isEnabled || framebuffer == null) {
             ingame.renderGameOverlay(partialTicks, hasScreen, mouseX, mouseY);
             return;

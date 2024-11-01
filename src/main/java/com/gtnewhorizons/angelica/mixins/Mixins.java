@@ -202,24 +202,6 @@ public enum Mixins {
             "angelica.animation.MixinWorldRenderer",
             "angelica.animation.MixinRenderItem")),
 
-    EXTRA_UTILITIES_THREAD_SAFETY(new Builder("Enable thread safety fixes in Extra Utilities").setPhase(Phase.LATE)
-        .addTargetedMod(TargetedMod.EXTRAUTILS).setSide(Side.CLIENT)
-        .setApplyIf(() -> AngelicaConfig.fixExtraUtilsSodiumCompat)
-        .addMixinClasses(
-            "client.extrautils.MixinRenderBlockConnectedTextures",
-            "client.extrautils.MixinRenderBlockConnectedTexturesEthereal",
-            "client.extrautils.MixinIconConnectedTexture")),
-
-    MFR_THREAD_SAFETY(new Builder("Enable thread safety fixes for MineFactory Reloaded").setPhase(Phase.LATE)
-            .addTargetedMod(TargetedMod.MINEFACTORY_RELOADED).setSide(Side.CLIENT)
-            .setApplyIf(() -> AngelicaConfig.fixMineFactoryReloadedSodiumCompat)
-            .addMixinClasses("client.minefactoryreloaded.MixinRedNetCableRenderer")),
-
-    SPEEDUP_CAMPFIRE_BACKPORT_ANIMATIONS(new Builder("Add animation speedup support to Campfire Backport").setPhase(Phase.LATE)
-            .addTargetedMod(TargetedMod.CAMPFIRE_BACKPORT).setSide(Side.CLIENT)
-            .setApplyIf(() -> AngelicaConfig.speedupAnimations)
-            .addMixinClasses("client.campfirebackport.MixinRenderBlockCampfire")),
-
     IC2_FLUID_RENDER_FIX(new Builder("IC2 Fluid Render Fix").setPhase(Phase.EARLY).setSide(Side.CLIENT)
         .addTargetedMod(TargetedMod.IC2).setApplyIf(() -> AngelicaConfig.speedupAnimations)
         .addMixinClasses("angelica.textures.ic2.MixinRenderLiquidCell")),
@@ -313,7 +295,7 @@ public enum Mixins {
         .addTargetedMod(TargetedMod.THAUMCRAFT)
         .addMixinClasses("notfine.leaves.thaumcraft.MixinBlockMagicalLeaves")
     ),
-    THAUMCRAFT_BETTER_FACE_CULLING(new Builder("Better face culling Thaumcraft compat")
+    NOTFINE_THAUMCRAFT_BETTER_FACE_CULLING(new Builder("Better face culling Thaumcraft compat")
         .setSide(Side.CLIENT).setPhase(Phase.LATE)
         .setApplyIf(() -> NotFineConfig.betterBlockFaceCulling)
         .addTargetedMod(TargetedMod.THAUMCRAFT)

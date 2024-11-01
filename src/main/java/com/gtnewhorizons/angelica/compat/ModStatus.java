@@ -23,7 +23,6 @@ public class ModStatus {
     public static boolean isLotrLoaded;
     public static boolean isChunkAPILoaded;
     public static boolean isEIDBiomeLoaded;
-    public static boolean isXaerosMinimapLoaded;
     public static boolean isHoloInventoryLoaded;
     public static boolean isBattlegearLoaded;
     public static boolean isBackhandLoaded;
@@ -38,7 +37,6 @@ public class ModStatus {
         isLotrLoaded = Loader.isModLoaded("lotr");
         isChunkAPILoaded = Loader.isModLoaded("chunkapi");
         isEIDBiomeLoaded = Loader.isModLoaded("endlessids_biome");
-        isXaerosMinimapLoaded = Loader.isModLoaded("XaeroMinimap");
         isHoloInventoryLoaded = Loader.isModLoaded("holoinventory");
         isBattlegearLoaded = Loader.isModLoaded("battlegear2");
         isBackhandLoaded = Loader.isModLoaded("backhand");

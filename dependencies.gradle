@@ -89,18 +89,10 @@ dependencies {
     compileOnly("com.falsepattern:chunkapi-mc1.7.10:0.5.1:api") { transitive = false }
     compileOnly("com.falsepattern:endlessids-mc1.7.10:1.5-beta0003:dev") { transitive = false }
 
-    compileOnly(rfg.deobf("curse.maven:extrautils-225561:2264383"))
     compileOnly(rfg.deobf("curse.maven:dynamiclights-227874:2337326"))
-
-    compileOnly("curse.maven:minefactory-reloaded-66672:2277486")
 
     compileOnly("com.github.GTNewHorizons:NotEnoughIds:2.1.6:dev") // Mixin Version
     compileOnly("com.github.GTNewHorizons:NotEnoughIds-Legacy:1.4.7:dev") // ASM Version
-
-    compileOnly(rfg.deobf("curse.maven:campfirebackport-387444:4611675"))
-    // HMMMMM
-    compileOnly(rfg.deobf("curse.maven:journeymap-32274:2367915"))
-    compileOnly(rfg.deobf("curse.maven:xaeros-minimap-263420:5060684"))
 
     compileOnly("com.github.GTNewHorizons:HoloInventory:2.4.12-GTNH:dev")
 
@@ -117,4 +109,12 @@ dependencies {
     testImplementation('org.junit.jupiter:junit-jupiter')
     testImplementation("org.mockito:mockito-core:3.+")
     testImplementation("org.lwjgl.lwjgl:lwjgl:2.9.4-nightly-20150209")
+
+    api(rfg.deobf("curse.maven:extrautils-225561:2264383"))
+
+    shadowImplementation("com.github.GTNewHorizons:AngelicaCompat:1.0.0:dev") {
+        exclude module: "Angelica" // we only want to shadow the runtime module
+        exclude module: "GTNHLib"
+        exclude module: "unimixins"
+    }
 }

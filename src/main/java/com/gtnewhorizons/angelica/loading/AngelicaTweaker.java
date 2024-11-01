@@ -8,10 +8,13 @@ import com.gtnewhorizon.gtnhmixins.IEarlyMixinLoader;
 import com.gtnewhorizons.angelica.config.AngelicaConfig;
 import com.gtnewhorizons.angelica.mixins.Mixins;
 import com.gtnewhorizons.angelica.mixins.TargetedMod;
-import com.gtnewhorizons.angelica.transform.compat.CompatASMTransformers;
+import com.gtnewhorizons.angelicacompat.core.AngelicaCompatCore;
+import cpw.mods.fml.relauncher.CoreModManager;
+import cpw.mods.fml.relauncher.FMLLaunchHandler;
 import cpw.mods.fml.relauncher.IFMLLoadingPlugin;
 import jss.notfine.asm.AsmTransformers;
 import jss.notfine.asm.mappings.Namer;
+import net.minecraft.launchwrapper.LaunchClassLoader;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,6 +24,10 @@ import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.spongepowered.asm.launch.GlobalProperties;
 import org.spongepowered.asm.service.mojang.MixinServiceLaunchWrapper;
 
+import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -42,11 +49,33 @@ import java.util.Set;
         "com.gtnewhorizons.angelica.glsm.GLStateManager"})
 public class AngelicaTweaker implements IFMLLoadingPlugin, IEarlyMixinLoader {
 
+    public static boolean AUTO_LOAD_COMPAT = true;
+
     private static final boolean DUMP_CLASSES = Boolean.parseBoolean(System.getProperty("angelica.dumpClass", "false"));
     private static boolean OBF_ENV;
     public static final Logger LOGGER = LogManager.getLogger("Angelica");
 
     private String[] transformerClasses;
+
+    static {
+        try {
+            Field fmlLaunchHandlerField = FMLLaunchHandler.class.getDeclaredField("INSTANCE");
+            fmlLaunchHandlerField.setAccessible(true);
+            FMLLaunchHandler fmlLaunchHandler = (FMLLaunchHandler) fmlLaunchHandlerField.get(null);
+
+            Field classLoaderField = FMLLaunchHandler.class.getDeclaredField("classLoader");
+            classLoaderField.setAccessible(true);
+            LaunchClassLoader classLoader = (LaunchClassLoader) classLoaderField.get(fmlLaunchHandler);
+
+            String location = AngelicaCompatCore.class.getProtectionDomain().getCodeSource().getLocation().getPath();
+            Method launchCoreModMethod = CoreModManager.class.getDeclaredMethod("loadCoreMod", LaunchClassLoader.class, String.class, File.class);
+            launchCoreModMethod.setAccessible(true);
+            launchCoreModMethod.invoke(null, classLoader, "com.gtnewhorizons.angelicacompat.core.AngelicaCompatCore", new File(location));
+
+        } catch (InvocationTargetException | NoSuchMethodException | NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     static {
         try {
@@ -70,18 +99,20 @@ public class AngelicaTweaker implements IFMLLoadingPlugin, IEarlyMixinLoader {
 
     @Override
     public String[] getASMTransformerClass() {
+
         // Directly add this to the MixinServiceLaunchWrapper tweaker's list of Tweak Classes
         final List<String> mixinTweakClasses = GlobalProperties.get(MixinServiceLaunchWrapper.BLACKBOARD_KEY_TWEAKCLASSES);
         if (mixinTweakClasses != null) {
             mixinTweakClasses.add(MixinCompatHackTweaker.class.getName());
         }
         if (transformerClasses == null) {
-            final List<String> transformers = new ArrayList<>(CompatASMTransformers.getTransformers());
+            final List<String> transformers = new ArrayList<>();
             final List<String> notFineTransformers = AsmTransformers.getTransformers();
             if (!notFineTransformers.isEmpty()) Namer.initNames();
             transformers.addAll(notFineTransformers);
             transformerClasses = transformers.toArray(new String[0]);
         }
+
         return transformerClasses;
     }
 
